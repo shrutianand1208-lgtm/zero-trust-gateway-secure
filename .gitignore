@@ -1,0 +1,20 @@
+# Ignore private keys (never commit these!)
+certs/*.key
+certs/*.srl
+certs/*.csr
+
+# Ignore OS noise
+.DS_Store
+
+# Ignore build outputs
+bin/
+*.o
+*.out
+
+# Ignore Go build cache
+*.exe
+*.test
+
+certs/*.key
+certs/*.csr
+certs/*.srl
