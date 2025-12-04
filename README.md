@@ -1,191 +1,156 @@
-🚀 Zero Trust Gateway (Secure)
+# 🚀 Zero Trust Gateway (Secure)
 
-A minimalist Zero Trust overlay network written in Go
+A minimalist **Zero Trust overlay network** written in Go — inspired by Tailscale, ZeroTier, BeyondCorp, and Aviatrix.
 
-This project demonstrates core cloud & networking concepts:
+This project demonstrates:
 
-Control-plane / data-plane separation
+- Control-plane / data-plane separation  
+- **mTLS authentication** with custom CA  
+- Dynamic policies  
+- Linux **TUN interfaces**  
+- Routing & firewall automation  
+- UDP overlay network  
+- Raw IP packet forwarding  
+- Distributed systems concepts  
 
-mTLS authentication with a custom CA
+---
 
-Dynamic policy distribution
+## 🧱 Architecture Overview
 
-Linux TUN interfaces
-
-Routing + firewall automation
-
-Heartbeats, node registry, health status
-
-UDP-based overlay transport
-
-Raw IP packet forwarding
-
-Secure system design patterns
-
-It is built as a learning project for systems, networking, and security engineering.
-
-🧱 Architecture Overview
-
+```
                    +-----------------------------+
                    |        Control Plane        |
                    |-----------------------------|
-HTTPS + mTLS  ---> | /register (issue token +    |
-                   |             allocate tun IP)|
+HTTPS + mTLS  ---> | /register (alloc tunnel IP) |
 HTTPS + mTLS  ---> | /policy (CIDR allow list)   |
 HTTPS + mTLS  ---> | /heartbeat                  |
 HTTPS + mTLS  ---> | /nodes (debug view)         |
                    +--------------+--------------+
                                   |
-                HTTPS/mTLS Secure Control Channel
+                      Secure HTTPS/mTLS channel
                                   |
      -----------------------------------------------------------------
      |                                                               |
 +------------+                                            +------------+
 |   Agent A  |                                            |   Agent B  |
 |------------|                                            |------------|
-| Linux TUN interface (ztgwa)                             | Linux TUN (ztgwb)
-| Tunnel IP: 100.64.0.10                                   | Tunnel IP: 100.64.0.11
-| Programs routes:                                          | Programs routes:
-|   ip route replace <cidr> dev ztgwa                      |   ip route replace <cidr> dev ztgwb
-| Firewall rules (iptables)                                | Firewall rules
+| Linux TUN (ztgwa)                                       | Linux TUN (ztgwb)
+| Tunnel: 100.64.0.10                                     | Tunnel: 100.64.0.11
+| Routes via TUN                                          | Routes via TUN
+| iptables rules                                           | iptables rules
 | Heartbeat → CP                                           | Heartbeat → CP
-| Overlay UDP reader/writer                                | Overlay UDP reader/writer
-| TUN ↔ Overlay packet bridge                              | TUN ↔ Overlay packet bridge
+| UDP overlay                                              | UDP overlay
+| TUN ↔ UDP packet bridge                                  | TUN ↔ UDP packet bridge
 +------------+                                            +------------+
+```
 
+---
 
-✨ Features Implemented
-🔐 Zero Trust Control Plane
+# ✨ Features
 
-Full mTLS (client certificates required)
+### 🔐 Control Plane
+- Full mTLS (mutual TLS)
+- Token generation
+- Automatic tunnel IP allocation (`100.64.0.x`)
+- Dynamic CIDR policy distribution
+- Heartbeat health tracking
+- `/nodes` endpoint for debugging
 
-Custom Certificate Authority
+---
 
-Secure registration issuing:
+### 🖥️ Agent (Linux Data Plane)
+- HTTPS + mTLS communication
+- Creates Linux TUN interface:
+  - `/dev/net/tun`
+  - `TUNSETIFF`
+  - `ip link set up`
+  - `ip addr add`
+- Installs routes:
+  ```bash
+  ip route replace <cidr> dev <tun>
+  ```
+- Installs firewall rules:
+  ```bash
+  iptables -A OUTPUT -d <cidr> -j ACCEPT
+  ```
+- UDP overlay packet forwarding
 
-Auth token
+---
 
-Tunnel IP (100.64.0.x)
+# 🗂 Directory Structure
 
-Dynamic CIDR policy engine (config/policy.json)
-
-Heartbeats + last_seen + online/offline status
-
-/nodes endpoint showing:
-
-  IP, tags, last_seen, status
-
-  tunnel IP
-
-  masked token
-
-  allowed CIDRs
-
-🖥️ Linux Agent (Data Plane)
-
-Communicates via HTTPS + mTLS
-
-Creates Linux TUN interface:
-
-Opens /dev/net/tun
-
-Uses TUNSETIFF
-
-Assigns tunnel IP (/32)
-
-Brings interface up
-
-Programs routes:
-
-ip route replace <cidr> dev <tun>
-
-
-Programs firewall:
-
-iptables -A OUTPUT -d <cidr> -j ACCEPT
-
-
-Runs:
-
-Heartbeat loop
-
-Policy refresh loop
-
-TUN read loop
-
-Overlay UDP listener
-
-Packet forwarding to peers (if configured)
-
-🌐 Overlay Network
-
-TUN packets forwarded via UDP overlay socket
-
-Linux kernel → TUN → Agent → UDP → Peer
-
-Peer → UDP → Agent → TUN → Kernel
-
-Currently unencrypted overlay (Phase 7.3 adds AEAD).
-
-🗂 Directory Structure
+```
 zero-trust-gateway-secure/
   ├── cmd/
-  │   ├── control-plane/     # Control plane binary
-  │   └── agent/             # Agent binary
+  │   ├── control-plane/
+  │   └── agent/
   ├── internal/
-  │   ├── controlplane/      # HTTP handlers, registry, policy engine
-  │   ├── agent/             # TUN, overlay, TLS client config
-  │   └── models/            # Shared structs
+  │   ├── controlplane/
+  │   ├── agent/
+  │   └── models/
   ├── config/
   │   └── policy.json
-  ├── certs/                 # Certificates (public only)
-  ├── README.md
+  ├── certs/
   ├── go.mod
-  └── .gitignore
+  ├── go.sum
+  ├── .gitignore
+  └── README.md
+```
 
-🔐 Certificate Structure & Security
+---
 
-Your PKI has:
+# 🔐 Certificates & Security
 
-certs/ca.crt — CA certificate
+Private keys are **ignored** via `.gitignore`:
 
-certs/ca.key — NOT in git
-
-certs/cp.crt — control-plane cert
-
-certs/cp.key — NOT in git
-
-certs/agent.crt — agent cert
-
-certs/agent.key — NOT in git
-
-Your .gitignore must contain:
-
+```
 certs/*.key
 certs/*.csr
 certs/*.srl
+```
 
+Committed files (safe):
 
-🚀 Running the System (Full Flow)
-1️⃣ Start Control Plane (Mac)
+- `certs/ca.crt`
+- `certs/cp.crt`
+- `certs/agent.crt`
+
+---
+
+# 🚀 Running the Control Plane
+
+Run on macOS:
+
+```bash
 go run ./cmd/control-plane \
   --listen-addr=":8443" \
   --tls-cert="certs/cp.crt" \
   --tls-key="certs/cp.key" \
   --tls-client-ca="certs/ca.crt"
+```
 
+Expected:
 
-Expected output:
-
+```
 Control plane listening on https://:8443 (mTLS required)
+```
 
-2️⃣ Test CP Health with mTLS
+---
+
+# 🧪 Test Control Plane with curl (mTLS)
+
+```bash
 curl --cacert certs/ca.crt \
      --cert certs/agent.crt \
      --key certs/agent.key \
      https://localhost:8443/health
+```
 
-3️⃣ Start Agent (Linux VM)
+---
+
+# 🤖 Running the Agent (Linux VM)
+
+```bash
 sudo /usr/local/go/bin/go run ./cmd/agent \
   --node-id=node-a \
   --ip=10.250.0.10 \
@@ -193,71 +158,52 @@ sudo /usr/local/go/bin/go run ./cmd/agent \
   --route-mode=linux \
   --tunnel-name=ztgwa \
   --overlay-listen=":4000" \
-  --cp-url="https://<mac-ip>:8443" \
+  --cp-url="https://<MAC-IP>:8443" \
   --tls-enable=true \
   --tls-ca-cert="certs/ca.crt" \
   --tls-client-cert="certs/agent.crt" \
   --tls-client-key="certs/agent.key"
+```
 
+Expected logs:
 
-Expected:
-
+```
 Registered successfully, tunnel_ip=100.64.0.10
-TUN ztgwa created and brought up
-Assigned 100.64.0.10/32
-Applying policy...
+TUN created and up
+Policy applied
 Overlay listener started
 Heartbeat OK
+```
 
-4️⃣ Check Node State
+---
 
-From Mac:
+# 🔍 Inspect Nodes (Mac)
 
+```bash
 curl --cacert certs/ca.crt \
      --cert certs/agent.crt \
      --key certs/agent.key \
      https://localhost:8443/nodes | jq
+```
 
-5️⃣ Validate Linux Network State
+---
+
+# 🧪 Validate TUN Interface (Linux)
+
+```bash
 ip addr show ztgwa
-ip route | grep 10.42.0.0
+ip route | grep 10.42
 iptables -S OUTPUT | grep 10.42
+```
 
-6️⃣ Test TUN RX Flow
+---
 
-Ping any IP inside allowed CIDR:
+# 📌 Future Enhancements
+- Encrypted overlay (AES-GCM / ChaCha20)
+- Peer auto-discovery
+- STUN-based NAT traversal
+- Multi-hop routing
+- Persisting nodes in DB
+- Web dashboard
 
-ping -c 1 10.42.0.5
-
-
-Agent log should show:
-
-TUN read 84 bytes
-
-📌 Future Extensions
-
-These are optional, but great to implement:
-
-🔐 1. Encrypted overlay (AEAD)
-
-ChaCha20-Poly1305 or AES-GCM
-
-Key exchange (Noise IK or WireGuard-style)
-
-🌎 2. Multi-node peer discovery
-
-Gossip or CP-managed peer list
-
-Mesh building
-
-🧭 3. Multi-hop routing
-
-Forward packets based on tunnel IP prefix
-
-🌐 4. NAT traversal
-
-STUN + UDP hole punching
-
-🗄 5. Persistent control-plane datastore
-
-SQLite or Postgres
+---
