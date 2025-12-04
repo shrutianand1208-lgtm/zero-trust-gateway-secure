@@ -1,6 +1,6 @@
 # 🚀 Zero Trust Gateway (Secure)
 
-A minimalist **Zero Trust overlay network** written in Go — inspired by Tailscale, ZeroTier, BeyondCorp, and Aviatrix.
+A minimalist **Zero Trust overlay network** written in Go.
 
 This project demonstrates:
 
