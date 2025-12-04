@@ -117,6 +117,125 @@ Committed files (safe):
 
 ---
 
+# 🔐 Generating Certificates (Required Before Running)
+
+This project uses full **mTLS**, so you must generate:
+
+- A Certificate Authority (CA)
+- Control Plane certificate + key
+- Agent certificate + key
+
+Follow these steps inside the `certs/` directory:
+
+---
+
+## 1️⃣ Generate CA Key + Certificate
+
+```bash
+cd certs
+
+# Generate CA private key
+openssl genrsa -out ca.key 4096
+
+# Create CA certificate
+openssl req -x509 -new -nodes \
+  -key ca.key \
+  -sha256 \
+  -days 3650 \
+  -subj "/CN=ZeroTrust-CA" \
+  -out ca.crt
+```
+
+---
+
+## 2️⃣ Generate Control Plane Certificate
+
+### Create CSR config file:
+
+`cp-openssl.cnf` (already in repo):
+
+```ini
+[ req ]
+default_bits       = 2048
+prompt             = no
+default_md         = sha256
+distinguished_name = dn
+req_extensions     = req_ext
+
+[ dn ]
+CN = control-plane
+
+[ req_ext ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = control-plane
+IP.1  = 127.0.0.1
+```
+
+### Generate CP key + CSR:
+
+```bash
+openssl genrsa -out cp.key 2048
+
+openssl req -new \
+  -key cp.key \
+  -out cp.csr \
+  -config cp-openssl.cnf
+```
+
+### Sign CP certificate with CA:
+
+```bash
+openssl x509 -req \
+  -in cp.csr \
+  -CA ca.crt \
+  -CAkey ca.key \
+  -CAcreateserial \
+  -out cp.crt \
+  -days 365 \
+  -sha256 \
+  -extensions req_ext \
+  -extfile cp-openssl.cnf
+```
+
+---
+
+## 3️⃣ Generate Agent Certificate
+
+```bash
+openssl genrsa -out agent.key 2048
+
+openssl req -new \
+  -key agent.key \
+  -subj "/CN=agent" \
+  -out agent.csr
+
+openssl x509 -req \
+  -in agent.csr \
+  -CA ca.crt \
+  -CAkey ca.key \
+  -CAcreateserial \
+  -out agent.crt \
+  -days 365 \
+  -sha256
+```
+
+---
+
+## 🔒 Security Reminder
+
+Add this to `.gitignore` (already handled):
+
+```
+certs/*.key
+certs/*.csr
+certs/*.srl
+```
+
+
+
+
 # 🚀 Running the Control Plane
 
 Run on macOS:
